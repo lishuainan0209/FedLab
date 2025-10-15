@@ -20,8 +20,8 @@ from .handler import ServerHandler
 from ..network import DistNetwork
 from ..network_manager import NetworkManager
 from ..coordinator import Coordinator
-from ...utils import Logger, MessageCode
-
+from ...utils import Logger
+from ..communicator.package import MessageCode
 DEFAULT_SERVER_RANK = 0
 
 

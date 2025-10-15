@@ -43,4 +43,3 @@ def dtype_flab2torch(fedlab_type):
     return supported_torch_dtypes[fedlab_type]
 
 from .package import Package, supported_torch_dtypes
-from .processor import PackageProcessor

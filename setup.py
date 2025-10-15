@@ -42,5 +42,6 @@ setup(
         "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python :: 3",
     ],
+    # test_suite="tests.get_tests" 是 setuptools 用于指定测试套件入口的配置，作用是告诉 python setup.py test 命令：“去哪里找测试用例，以及如何组织这些测试用例”。
     test_suite="tests.get_tests",
 )

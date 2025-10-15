@@ -13,10 +13,11 @@
 # limitations under the License.
 
 import os
+
 import torch
 import torch.distributed as dist
 
-from .communicator.processor import Package, PackageProcessor
+from .communicator import Package
 from ..utils import Logger
 
 type2byte = {
@@ -40,6 +41,7 @@ class DistNetwork(object):
         ethernet (str): the name of local ethernet. User could check it using command ifconfig. 
         dist_backend (str or torch.distributed.Backend): :attr:`backend` of ``torch.distributed``. Valid values include ``mpi``, ``gloo``, and ``nccl``. Default: ``gloo``.
     """
+
     def __init__(self,
                  address: tuple,
                  world_size: int,
@@ -82,7 +84,7 @@ class DistNetwork(object):
     def send(self, content=None, message_code=None, dst=0, count=True):
         """Send tensor to process rank=dst"""
         pack = Package(message_code=message_code, content=content)
-        PackageProcessor.send_package(pack, dst=dst)
+        pack.send_package(dst=dst)
         if pack.content is not None and count is True:
             self.send_volume_intotal += pack.content.numel() * type2byte[
                 pack.dtype]
@@ -94,8 +96,7 @@ class DistNetwork(object):
 
     def recv(self, src=None, count=True):
         """Receive tensor from process rank=src"""
-        sender_rank, message_code, content = PackageProcessor.recv_package(
-            src=src)
+        sender_rank, message_code, content = Package().recv_package(src=src)
 
         if content is not None and count is True:
             volumn = sum([data.numel() for data in content])

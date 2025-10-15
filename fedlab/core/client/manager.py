@@ -19,7 +19,8 @@ from ..network import DistNetwork
 from ..network_manager import NetworkManager
 from ..model_maintainer import ModelMaintainer
 from .trainer import ClientTrainer, SerialClientTrainer
-from ...utils import Logger, MessageCode
+from ...utils import Logger
+from ..communicator.package import MessageCode
 
 
 class ClientManager(NetworkManager):

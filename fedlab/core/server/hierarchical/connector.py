@@ -19,12 +19,10 @@ import torch
 from torch.multiprocessing import Queue
 from ...network import DistNetwork
 from ...network_manager import NetworkManager
-from ...communicator.processor import PackageProcessor
 from ...coordinator import Coordinator
-from ....utils import MessageCode,Logger
-
+from ....utils import Logger
+from ...communicator.package import MessageCode,Package
 torch.multiprocessing.set_sharing_strategy("file_system")
-
 
 class Connector(NetworkManager):
     """Abstract class for basic Connector, which is a sub-module of :class:`Scheduler`.
@@ -112,7 +110,7 @@ class ServerConnector(Connector):
 
         while True:
             # server -> client
-            sender, message_code, payload = PackageProcessor.recv_package()
+            sender, message_code, payload = Package().recv_package()
             self.mq_write.put_nowait((sender, message_code, payload))
 
             if message_code == MessageCode.Exit:

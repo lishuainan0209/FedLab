@@ -15,5 +15,4 @@
 
 from .aggregator import Aggregators
 from .logger import Logger
-from .message_code import MessageCode
 from .serialization import SerializationTool

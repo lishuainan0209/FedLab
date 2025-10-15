@@ -13,16 +13,30 @@
 # limitations under the License.
 
 import warnings
-from typing import List
 from copy import deepcopy
+from enum import Enum
+from typing import List
+
+import numpy as np
 import torch
 import torch.distributed as dist
 
-from . import HEADER_SENDER_RANK_IDX, HEADER_RECEIVER_RANK_IDX, HEADER_SLICE_SIZE_IDX, \
-    HEADER_MESSAGE_CODE_IDX, HEADER_DATA_TYPE_IDX
 from . import DEFAULT_SLICE_SIZE, DEFAULT_MESSAGE_CODE_VALUE
-from . import HEADER_SIZE
-from ...utils.message_code import MessageCode
+from . import HEADER_DATA_TYPE_IDX, HEADER_SIZE, HEADER_RECEIVER_RANK_IDX, HEADER_SLICE_SIZE_IDX, dtype_flab2torch, dtype_torch2flab
+from . import HEADER_SENDER_RANK_IDX, HEADER_MESSAGE_CODE_IDX
+
+
+class MessageCode(Enum):
+    """Different types of messages between client and server that we support go here."""
+    # Server and Client communication agreements
+    ParameterRequest = 0
+    GradientUpdate = 1
+    ParameterUpdate = 2
+    EvaluateParams = 3
+    Exit = 4
+    SetUp = 5
+    Activation = 6
+
 
 supported_torch_dtypes = [
     torch.int8, torch.int16, torch.int32, torch.int64, torch.float16,
@@ -54,7 +68,8 @@ class Package(object):
         if message_code is None:
             message_code = DEFAULT_MESSAGE_CODE_VALUE
         else:
-            if isinstance(message_code, MessageCode):
+            # change-001    可以自定义包的码,但是码必须是enum类型的
+            if isinstance(message_code, Enum):
                 message_code = message_code.value
         assert isinstance(
             message_code, int
@@ -62,7 +77,7 @@ class Package(object):
             type(message_code))
 
         # initialize header. The dtype of header is set as torch.int32 as default.
-        self.header = torch.zeros(size=(HEADER_SIZE, ), dtype=torch.int32)
+        self.header = torch.zeros(size=(HEADER_SIZE,), dtype=torch.int32)
 
         if dist.is_initialized():
             self.header[HEADER_SENDER_RANK_IDX] = dist.get_rank()
@@ -74,7 +89,7 @@ class Package(object):
         self.header[HEADER_DATA_TYPE_IDX] = -1  # assigned by processor
 
         # initialize content and slices
-        self.slices = []
+        self._slices = []
         self.content = None
         self.dtype = None
 
@@ -109,8 +124,8 @@ class Package(object):
             tensor = tensor.to(self.dtype)
             self.content = torch.cat((self.content, tensor))
 
-        self.slices += slice
-        self.header[HEADER_SLICE_SIZE_IDX] = len(self.slices)
+        self._slices += slice
+        self.header[HEADER_SLICE_SIZE_IDX] = len(self._slices)
 
     def append_tensor_list(self, tensor_list: List[torch.Tensor]):
         """Append a list of tensors to :attr:`Package.content`.
@@ -130,50 +145,117 @@ class Package(object):
                 "FedLab only supports following data types: torch.int8, torch.int16, torch.int32, torch.int64, torch.float16, torch.float32, torch.float64."
             )
 
-    @staticmethod
-    def parse_content(slices, content):
-        """Parse package content into a list of tensors
+    def _send_header(self, dst):
+        self.header[HEADER_RECEIVER_RANK_IDX] = dst
+        dist.send(self.header, dst=dst)
 
-        Args:
-            slices (list[int]): A list containing number of elements of each tensor. Each number is used as offset in parsing process.
-            content (torch.Tensor): :attr:`Package.content`, a 1-D tensor composed of several 1-D tensors and their corresponding offsets. For more details about :class:`Package`.
+    def _send_slices(self, dst):
+        np_slices = np.array(self._slices, dtype=np.int32)
+        tensor_slices = torch.from_numpy(np_slices)
+        dist.send(tensor_slices, dst=dst)
 
-        Returns:
-            list[torch.Tensor]: A list of 1-D tensors parsed from ``content``
+    def _send_content(self, dst):
+        dist.send(self.content, dst=dst)
+
+    def send_package(self, dst):
+        """Three-segment tensor communication pattern based on ``torch.distributed``
+
+        Pattern is shown as follows:
+            1.1 sender: send a header tensor containing ``slice_size`` to receiver
+
+            1.2 receiver: receive the header, and get the value of ``slice_size`` and create a buffer for incoming slices of content
+
+            2.1 sender: send a list of slices indicating the size of every content size.
+
+            2.2 receiver: receive the slices list.
+
+            3.1 sender: send a content tensor composed of a list of tensors.
+
+            3.2 receiver: receive the content tensor, and parse it to obtain slices list using parser function
         """
-        index = 0  # parse variable for content
+
+        # body
+        if self.dtype is not None:
+            self.header[HEADER_DATA_TYPE_IDX] = dtype_torch2flab(self.dtype)
+
+        # sender header firstly
+        self._send_header(dst=dst)
+
+        # if package got content, then send remain parts
+        if self.header[HEADER_SLICE_SIZE_IDX] > 0:
+            self._send_slices(dst=dst)
+            self._send_content(dst=dst)
+
+    def _recv_header(self, src):
+        buffer = torch.zeros(size=(HEADER_SIZE,), dtype=torch.int32)
+        dist.recv(buffer, src=src)
+        self.header[HEADER_SENDER_RANK_IDX] = int(buffer[HEADER_SENDER_RANK_IDX])
+        self.header[HEADER_RECEIVER_RANK_IDX] = int(buffer[HEADER_RECEIVER_RANK_IDX])
+        self.header[HEADER_SLICE_SIZE_IDX] = int(buffer[HEADER_SLICE_SIZE_IDX])
+        self.header[HEADER_MESSAGE_CODE_IDX] = MessageCode(int(buffer[HEADER_MESSAGE_CODE_IDX])).value
+        self.header[HEADER_DATA_TYPE_IDX] = int(buffer[HEADER_DATA_TYPE_IDX])
+
+    def _recv_slices(self, src):
+        buffer_slices = torch.zeros(size=(self.header[HEADER_SLICE_SIZE_IDX],), dtype=torch.int32)
+        dist.recv(buffer_slices, src=src)
+        slices = [slc.item() for slc in buffer_slices]
+        return slices
+
+    def _recv_content(self, src):
+        slices = self._recv_slices(src=src)
+        #         content_size = sum(slices)  # warn 原来fedlab源码中, 错误地将 slices 中的所有元素（包括形状、维度数等无关信息）求和，而没有区分 “元素数” 和 “辅助元信息”。
+        content_size = 0
+        i = 0
+        while i < len(slices):
+            numel = slices[i]  # 每个张量元信息的第一个元素是 numel
+            content_size += numel
+            # 跳过当前张量的其他元信息（len(shape) + 1 个元素：1个len(shape) + len(shape)个shape值）
+            len_shape = slices[i + 1]
+            i += 2 + len_shape  # 移动到下一个张量的元信息起始位置
+        dtype = dtype_flab2torch(self.header[HEADER_DATA_TYPE_IDX])
+        buffer = torch.zeros(size=(content_size,), dtype=dtype)
+        dist.recv(buffer, src=src)
+
+        index = 0  # parse variable for content, 代表每个tensor在content开始的下标
         iter = 0  # parse variable for slices
-        parse_result = []
+        self.content = []
+        # slices中, 是 [张量数据量, 张量维度, 张量每个维度的大小...,张量数据量, 张量维度, 张量每个维度的大小...] 这样不断重复的
+        # iter代表的是每个张量的 张量数据量 的下标
         while iter < len(slices):
             offset = slices[iter]  # offset of content
             shape_len = slices[iter + 1]  # offset of shape tuple
-            shape = tuple(slices[iter + 2:iter + 2 +
-                                 shape_len])  # obtain shape tuple
-
-            seg_tensor = content[index:index + offset]
+            shape = tuple(slices[iter + 2:iter + 2 + shape_len])  # obtain shape tuple
+            # 参数准备
+            # 获取内容
+            seg_tensor = buffer[index:index + offset]  # tensor具体内容
             reshape_tensor = seg_tensor.view(size=shape)  # reshape
+            self.content.append(reshape_tensor)
 
-            parse_result.append(reshape_tensor)
+            # 为下一个循环进行准备
             index += offset
-            iter += shape_len + 2
+            iter += shape_len + 2  # 张量数据量,张量维度是两个量,所以加2
 
-        return parse_result
+    def recv_package(self, src=None):
+        """Three-segment tensor communication pattern based on ``torch.distributed``
 
-    @staticmethod
-    def parse_header(header):
-        """Parse header to get information of current package.
+        Pattern is shown as follows:
+            1.1 sender: send a header tensor containing ``slice_size`` to receiver
 
-        Args:
-            header (torch.Tensor): :attr:`Package.header`, a 1-D tensor composed of 4 elements: ``torch.Tensor([sender_rank, recv_rank, slice_size, message_code, data_type])``.
-            For more details about :class:`Package`.
+            1.2 receiver: receive the header, and get the value of ``slice_size`` and create a buffer for incoming slices of content
 
-        Returns:
-            tuple: A tuple containing 5 elements: ``(sender_rank, recv_rank, slice_size, message_code, data_type)``.
+            2.1 sender: send a list of slices indicating the size of every content size.
+
+            2.2 receiver: receive the slices list.
+
+            3.1 sender: send a content tensor composed of a list of tensors.
+
+            3.2 receiver: receive the content tensor, and parse it to obtain slices list using parser function
         """
-        sender_rank = int(header[HEADER_SENDER_RANK_IDX])
-        receiver_rank = int(header[HEADER_RECEIVER_RANK_IDX])
-        slice_size = int(header[HEADER_SLICE_SIZE_IDX])
-        message_code = MessageCode(int(header[HEADER_MESSAGE_CODE_IDX]))
-        data_type = int(header[HEADER_DATA_TYPE_IDX])
-
-        return sender_rank, receiver_rank, slice_size, message_code, data_type
+        self.content = None
+        self.header = torch.zeros(size=(HEADER_SIZE,), dtype=torch.int32)
+        self.dtype = None
+        # body
+        self._recv_header(src=src)
+        if self.header[HEADER_SLICE_SIZE_IDX] > 0:
+            self._recv_content(src=src)
+        return int(self.header[HEADER_SENDER_RANK_IDX]), MessageCode(int(self.header[HEADER_MESSAGE_CODE_IDX])), self.content
