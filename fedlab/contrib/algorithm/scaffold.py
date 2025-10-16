@@ -21,7 +21,7 @@ class ScaffoldServerHandler(SyncServerHandler):
         self.lr = lr
         self.global_c = torch.zeros_like(self.model_parameters)
 
-    def global_update(self, buffer):
+    def _global_update(self, buffer):
         # unpack
         dys = [ele[0] for ele in buffer]
         dcs = [ele[1] for ele in buffer]
@@ -47,10 +47,10 @@ class ScaffoldSerialClientTrainer(SGDSerialClientTrainer):
         super().setup_optim(epochs, batch_size, lr)
         self.cs = [None for _ in range(self.num_clients)]
 
-    def local_process(self, payload, id_list):
+    def train_process(self, payload, global_client_id_list):
         model_parameters = payload[0]
         global_c = payload[1]
-        for id in id_list:
+        for id in global_client_id_list:
             data_loader = self.dataset.get_dataloader(id, self.batch_size)
             pack = self.train(id, model_parameters, global_c, data_loader)
             self.cache.append(pack)

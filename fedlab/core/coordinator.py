@@ -24,14 +24,23 @@ class Coordinator(object):
 
     Args:
         setup_dict (dict): A dict like {rank:client_num ...}, representing the map relation between process rank and client id.
-        mode (str, optional): “GLOBAL” and "LOCAL". Coordinator will map client id to (rank, global id) or (rank, local id) according to mode. For example, client id 51 is in a machine which has 1 manager and serial trainer simulating 10 clients. LOCAL id means the index of its 10 clients. Therefore, global id 51 will be mapped into local id 1 (depending on setting).
     """
-    def __init__(self, setup_dict: dict, mode: str = 'LOCAL') -> None:
-        self.map = setup_dict
-        self.mode = mode
-
-    def map_id(self, id):
-        """a map function from client id to (rank,local id)
+    """
+    setup_dict是一个字典，格式为{rank: 客户端数量}，表示：
+    键rank：分布式训练中进程的唯一标识（如 0,1,2...）；
+    值客户端数量：该进程上模拟的本地虚拟客户端总数。
+    
+     转换过程（map_id方法）
+    对于输入的全局客户端 ID（如id=3），map_id通过以下步骤计算本地虚拟序号：
+    用m_id跟踪当前 ID 在 “剩余客户端数量” 中的偏移；
+    遍历setup_dict中的每个进程（rank）及其客户端数量（num）：
+        如果m_id >= num：说明该 ID 不在当前进程，减去当前进程的客户端数量（m_id -= num），继续检查下一个进程；
+        如果m_id < num：说明该 ID 在当前进程内，此时m_id就是该进程内的本地虚拟序号。
+    """
+    def __init__(self, setup_dict: dict) -> None:
+        self.rank_client_num_map = setup_dict
+    def map_id(self, global_id):
+        """a map function from client id to (rank,global_id)
         
         Args:
             id (int): client id
@@ -39,17 +48,16 @@ class Coordinator(object):
         Returns:
             rank, id : rank in distributed group and local id.
         """
-        m_id = id
-        for rank, num in self.map.items():
+        m_id = global_id
+        for rank, num in self.rank_client_num_map.items():
             if m_id >= num:
                 m_id -= num
             else:
                 local_id = m_id
-                global_id = id
-                ret_id = local_id if self.mode == 'LOCAL' else global_id
+                ret_id = global_id
                 return rank, ret_id
 
-    def map_id_list(self, id_list: list):
+    def map_id_list(self, global_id_list: list):
         """a map function from id_list to dict{rank:local id}
 
             This can be very useful in Scale modules.
@@ -61,29 +69,23 @@ class Coordinator(object):
             map_dict (dict): contains process rank and its relative local client ids.
         """
         map_dict = {}
-        for id in id_list:
-            rank, id = self.map_id(id)
+        for global_id in global_id_list:
+            rank, id = self.map_id(global_id)
             if rank in map_dict.keys():
                 map_dict[rank].append(id)
             else:
                 map_dict[rank] = [id]
         return map_dict
 
-    def switch(self):
-        if self.mode == 'GLOBAL':
-            self.mode = 'LOCAL'
-        elif self.mode == 'LOCAL':
-            self.mode = 'GLOBAL'
-        else:
-            raise ValueError("Invalid Map Mode {}".format(self.mode))
+
 
     @property
     def total(self):
-        return int(sum(self.map.values()))
+        return int(sum(self.rank_client_num_map.values()))
 
     def __str__(self) -> str:
-        return "Coordinator map information: {} \nMap mode: {} \nTotal: {}".format(
-            self.map, self.mode, self.total)
+        return "Coordinator map information: {} \nMap \nTotal: {}".format(
+            self.rank_client_num_map,  self.total)
 
     def __call__(self, info):
         if isinstance(info, int):

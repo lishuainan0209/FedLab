@@ -44,13 +44,13 @@ class SyntheticDataset(FedDataset):
             testset = BaseDataset(torch.Tensor(data[train_size:]), label[train_size:])
             torch.save(testset, os.path.join(path, "test","data{}.pkl".format(id)))
 
-    def get_dataset(self, id, type="train"):
+    def _get_dataset(self, global_client_id, type="train"):
         dataset = torch.load(
-            os.path.join(self.path, type, "data{}.pkl".format(id)))
+            os.path.join(self.path, type, "data{}.pkl".format(global_client_id)))
         return dataset
 
-    def get_dataloader(self, id, batch_size, type="train"):
-        dataset = self.get_dataset(id, type)
+    def get_dataloader(self, global_client_id, batch_size, type="train"):
+        dataset = self._get_dataset(global_client_id, type)
         batch_size = len(dataset) if batch_size is None else batch_size
         data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
         return data_loader

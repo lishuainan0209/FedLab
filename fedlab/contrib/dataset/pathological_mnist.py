@@ -95,7 +95,7 @@ class PathologicalMNIST(FedDataset):
         test_dataset = BaseDataset(test_samples, test_labels)
         torch.save(test_dataset, os.path.join(self.path, "test", "test.pkl"))
 
-    def get_dataset(self, id=None, type="train"):
+    def _get_dataset(self, global_client_id=None, type="train"):
         """Load subdataset for client with client ID ``cid`` from local file.
 
         Args:
@@ -106,12 +106,12 @@ class PathologicalMNIST(FedDataset):
             Dataset
         """
         if type == "train":
-            dataset = torch.load(os.path.join(self.path, type, "data{}.pkl".format(id)))
+            dataset = torch.load(os.path.join(self.path, type, "data{}.pkl".format(global_client_id)))
         else:
             dataset = torch.load(os.path.join(self.path, "test", "test.pkl"))
         return dataset
 
-    def get_dataloader(self, id=None, batch_size=None, type="train"):
+    def get_dataloader(self, global_client_id=None, batch_size=None, type="train"):
         """Return dataload for client with client ID ``cid``.
 
         Args:
@@ -119,7 +119,7 @@ class PathologicalMNIST(FedDataset):
             batch_size (int, optional): batch size in DataLoader.
             type (str, optional): Dataset type, can be ``"train"``, ``"val"`` or ``"test"``. Default as ``"train"``.
         """
-        dataset = self.get_dataset(id, type)
+        dataset = self._get_dataset(global_client_id, type)
         batch_size = len(dataset) if batch_size is None else batch_size
         data_loader = DataLoader(dataset, batch_size=batch_size)
         return data_loader

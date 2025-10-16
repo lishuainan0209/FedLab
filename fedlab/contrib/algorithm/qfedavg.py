@@ -14,7 +14,7 @@ from .basic_client import SGDSerialClientTrainer
 
 class qFedAvgServerHandler(SyncServerHandler):
     """qFedAvg server handler."""
-    def global_update(self, buffer):
+    def _global_update(self, buffer):
         deltas = [ele[0] for ele in buffer]
         hks = [ele[1] for ele in buffer]
 

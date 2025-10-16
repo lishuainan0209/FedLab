@@ -129,7 +129,7 @@ class PartitionedCIFAR10(FedDataset):
                 dataset,
                 os.path.join(self.path, "train", "data{}.pkl".format(id)))
 
-    def get_dataset(self, cid, type="train"):
+    def _get_dataset(self, global_client_id, type="train"):
         """Load subdataset for client with client ID ``cid`` from local file.
 
         Args:
@@ -140,10 +140,10 @@ class PartitionedCIFAR10(FedDataset):
             Dataset
         """
         dataset = torch.load(
-            os.path.join(self.path, type, "data{}.pkl".format(cid)))
+            os.path.join(self.path, type, "data{}.pkl".format(global_client_id)))
         return dataset
 
-    def get_dataloader(self, cid, batch_size=None, type="train"):
+    def get_dataloader(self, global_client_id, batch_size=None, type="train"):
         """Return dataload for client with client ID ``cid``.
 
         Args:
@@ -151,7 +151,7 @@ class PartitionedCIFAR10(FedDataset):
             batch_size (int, optional): batch size in DataLoader.
             type (str, optional): Dataset type, can be ``"train"``, ``"val"`` or ``"test"``. Default as ``"train"``.
         """
-        dataset = self.get_dataset(cid, type)
+        dataset = self._get_dataset(global_client_id, type)
         batch_size = len(dataset) if batch_size is None else batch_size
         data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
         return data_loader

@@ -30,7 +30,7 @@ class ClientManager(NetworkManager):
 
     Args:
         network (DistNetwork): Network configuration and interfaces.
-        trainer (ModelMaintainer): Subclass of :class:`ClientTrainer` or :class:`SerialClientTrainer`. Provides :meth:`local_process` and :attr:`uplink_package`. Define local client training procedure.
+        trainer (ModelMaintainer): Subclass of :class:`ClientTrainer` or :class:`SerialClientTrainer`. Provides :meth:`train_process` and :attr:`uplink_package`. Define local client training procedure.
     """
     def __init__(self, network: DistNetwork, trainer: ModelMaintainer):
         super().__init__(network)
@@ -53,7 +53,7 @@ class PassiveClientManager(ClientManager):
 
     Args:
         network (DistNetwork): Network configuration and interfaces.
-        trainer (ModelMaintainer): Subclass of :class:`ClientTrainer` or :class:`SerialClientTrainer`. Provides :meth:`local_process` and :attr:`uplink_package`. Define local client training procedure.
+        trainer (ModelMaintainer): Subclass of :class:`ClientTrainer` or :class:`SerialClientTrainer`. Provides :meth:`train_process` and :attr:`uplink_package`. Define local client training procedure.
         logger (Logger, optional): Object of :class:`Logger`.
     """
     def __init__(self,
@@ -81,16 +81,16 @@ class PassiveClientManager(ClientManager):
                 break
 
             elif message_code == MessageCode.ParameterUpdate:
-                id_list, payload = payload[0].to(
-                    torch.int32).tolist(), payload[1:]
+                # 针对 message_code == MessageCode.ParameterUpdate 的通信规则 payload的第一个数据为客户端的全局id
+                global_client_id_list, payload = payload[0].to(torch.int32).tolist(), payload[1:]
 
                 # check the trainer type
                 if self._trainer.type == SERIAL_TRAINER:
-                    self._trainer.local_process(payload=payload, id_list=id_list)
+                    self._trainer.train_process(payload=payload, global_client_id_list=global_client_id_list)
 
                 elif self._trainer.type == ORDINARY_TRAINER:
-                    assert len(id_list) == 1
-                    self._trainer.local_process(payload=payload, id=id_list[0])
+                    assert len(global_client_id_list) == 1
+                    self._trainer.train_process(payload=payload, global_client_id=global_client_id_list[0])
 
                 self.synchronize()
 
@@ -121,7 +121,7 @@ class ActiveClientManager(ClientManager):
 
     Args:
         network (DistNetwork): Network configuration and interfaces.
-        trainer (ClientTrainer): Subclass of :class:`ClientTrainer`. Provides :meth:`local_process` and :attr:`uplink_package`. Define local client training procedure.
+        trainer (ClientTrainer): Subclass of :class:`ClientTrainer`. Provides :meth:`train_process` and :attr:`uplink_package`. Define local client training procedure.
         logger (Logger, optional): Object of :class:`Logger`.
     """
     def __init__(self,
@@ -154,11 +154,12 @@ class ActiveClientManager(ClientManager):
             elif message_code == MessageCode.ParameterUpdate:
                 # check the trainer type
                 if self._trainer.type == SERIAL_TRAINER:
-                    self._trainer.local_process(id_list=[self._network.rank-1],
-                                                payload=payload)
+                    # warn 为什么直接-1? 混合时会有问题
+                    self._trainer.train_process(payload=payload, global_client_id_list=[self._network.rank-1] )
 
+                # warn 如果是混合的,这里直接-1不合适吧
                 elif self._trainer.type == ORDINARY_TRAINER:
-                    self._trainer.local_process(id=self._network.rank-1, payload=payload)
+                    self._trainer.train_process(payload=payload,global_client_id=self._network.rank-1 )
 
                 self.synchronize()
 

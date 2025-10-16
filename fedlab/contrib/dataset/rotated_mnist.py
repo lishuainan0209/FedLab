@@ -83,13 +83,13 @@ class RotatedMNIST(FedDataset):
             torch.save(dataset,
                        os.path.join(self.dir, "test", "data{}.pkl".format(i)))
 
-    def get_dataset(self, id, type="train"):
+    def _get_dataset(self, global_client_id, type="train"):
         dataset = torch.load(
-            os.path.join(self.dir, type, "data{}.pkl".format(id)))
+            os.path.join(self.dir, type, "data{}.pkl".format(global_client_id)))
         return dataset
 
-    def get_data_loader(self, id, batch_size=None, type="train"):
-        dataset = self.get_dataset(id, type)
+    def get_data_loader(self, global_client_id, batch_size=None, type="train"):
+        dataset = self._get_dataset(global_client_id, type)
         batch_size = len(dataset) if batch_size is None else batch_size
         data_loader = DataLoader(dataset, batch_size=batch_size)
         return data_loader

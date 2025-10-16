@@ -31,17 +31,17 @@ class FedOptServerHandler(FedAvgServerHandler):
     def num_clients_per_round(self):
         return self.round_clients
 
-    def local_process(self, payload, id_list):
+    def train_process(self, payload, global_client_id_list):
         model_parameters = payload[0]
         loss_ = AverageMeter()
         acc_ = AverageMeter()
-        for id in tqdm(id_list):
+        for id in tqdm(global_client_id_list):
             data_loader = self.dataset.get_dataloader(id, self.batch_size)
             pack = self.train(model_parameters, data_loader, loss_, acc_)
             self.cache.append(pack)
         return loss_, acc_
 
-    def global_update(self, buffer):
+    def _global_update(self, buffer):
         gradient_list = [
             torch.sub(ele[0], self.model_parameters) for ele in buffer
         ]

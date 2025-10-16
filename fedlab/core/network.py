@@ -90,9 +90,10 @@ class DistNetwork(object):
                 pack.dtype]
 
         self._LOGGER.info(
-            "Sent package to destination {}, message code {}, content length {}"
+            "Sent package to destination {}, message code {}, content element num is  {}, comminication cost {} B"
             .format(dst, message_code,
-                    0 if pack.content is None else pack.content.numel()))
+                    0 if pack.content is None else pack.content.numel(),
+                    0 if pack.content is None else pack.content.numel()*pack.content.element_size()))
 
     def recv(self, src=None, count=True):
         """Receive tensor from process rank=src"""
@@ -109,9 +110,10 @@ class DistNetwork(object):
             self.recv_volume_intotal += volumn * type2byte[content[0].dtype]
 
         self._LOGGER.info(
-            "Received package from source {}, message code {}, content length {}"
+            "Received package from source {}, message code {}, content element num is  {}, comminication cost {} B {}"
             .format(sender_rank, message_code,
-                    0 if content is None else volumn))
+                    0 if content is None else volumn,
+                    0 if content is None else volumn*content.element_size()))
         return sender_rank, message_code, content
 
     def broadcast_send(self, content=None, message_code=None, dst=None, count=True):

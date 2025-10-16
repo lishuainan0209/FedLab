@@ -61,9 +61,9 @@ class SGDClientTrainer(ClientTrainer):
         self.optimizer = torch.optim.SGD(self._model.parameters(), lr)
         self.criterion = torch.nn.CrossEntropyLoss()
 
-    def local_process(self, payload, id):
+    def train_process(self, payload, global_client_id):
         model_parameters = payload[0]
-        train_loader = self.dataset.get_dataloader(id, self.batch_size)
+        train_loader = self.dataset.get_dataloader(global_client_id, self.batch_size)
         self.train(model_parameters, train_loader)
 
     def train(self, model_parameters, train_loader) -> None:
@@ -132,9 +132,9 @@ class SGDSerialClientTrainer(SerialClientTrainer):
         self.cache = []
         return package
 
-    def local_process(self, payload, id_list):
+    def train_process(self, payload, global_client_id_list):
         model_parameters = payload[0]
-        for id in (progress_bar := tqdm(id_list)):
+        for id in (progress_bar := tqdm(global_client_id_list)):
             progress_bar.set_description(f"Training on client {id}", refresh=True)
             data_loader = self.dataset.get_dataloader(id, self.batch_size)
             pack = self.train(model_parameters, data_loader)

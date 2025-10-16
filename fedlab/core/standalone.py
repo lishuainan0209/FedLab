@@ -37,12 +37,12 @@ class StandalonePipeline(object):
             broadcast = self.handler.downlink_package
 
             # client side
-            self.trainer.local_process(broadcast, sampled_clients)
+            self.trainer.train_process(broadcast, sampled_clients)
             uploads = self.trainer.uplink_package
 
             # server side
             for pack in uploads:
-                self.handler.load(pack)
+                self.handler.aggregation_algorithm(pack)
 
             # evaluate
             self.evaluate()

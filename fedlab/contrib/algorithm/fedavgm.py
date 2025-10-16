@@ -32,7 +32,7 @@ class FedAvgMServerHandler(SyncServerHandler):
         assert self.num_clients_per_round == len(clients)
         return clients
 
-    def global_update(self, buffer):
+    def _global_update(self, buffer):
         gradient_list = [
             torch.sub(self.model_parameters, ele[0]) for ele in buffer
         ]

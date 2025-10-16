@@ -17,7 +17,7 @@ class FedNovaServerHandler(SyncServerHandler):
     def setup_optim(self, option="weighted_scale"):
         self.option = option  # weighted_scale, uniform, weighted_com
 
-    def global_update(self, buffer):
+    def _global_update(self, buffer):
         models = [elem[0] for elem in buffer]
         taus = [elem[1] for elem in buffer]
 
@@ -63,9 +63,9 @@ class FedNovaServerHandler(SyncServerHandler):
 class FedNovaSerialClientTrainer(SGDSerialClientTrainer):
     """Federated client with local SGD solver."""
 
-    def local_process(self, payload, id_list):
+    def train_process(self, payload, global_client_id_list):
         model_parameters = payload[0]
-        for id in id_list:
+        for id in global_client_id_list:
             data_loader = self.dataset.get_dataloader(id, self.batch_size)
             pack = self.train(model_parameters, data_loader)
             tau = [torch.Tensor([len(data_loader) * self.epochs])]

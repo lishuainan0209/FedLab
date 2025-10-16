@@ -142,7 +142,7 @@ class PartitionCIFAR(FedDataset):
                 subsets[cid],
                 os.path.join(self.path, "train", "data{}.pkl".format(cid)))
 
-    def get_dataset(self, cid, type="train"):
+    def _get_dataset(self, cid, type="train"):
         """Load subdataset for client with client ID ``cid`` from local file.
 
         Args:
@@ -164,7 +164,7 @@ class PartitionCIFAR(FedDataset):
             batch_size (int, optional): batch size in DataLoader.
             type (str, optional): Dataset type, can be ``"train"``, ``"val"`` or ``"test"``. Default as ``"train"``.
         """
-        dataset = self.get_dataset(cid, type)
+        dataset = self._get_dataset(cid, type)
         batch_size = len(dataset) if batch_size is None else batch_size
         data_loader = DataLoader(dataset, batch_size=batch_size)
         return data_loader

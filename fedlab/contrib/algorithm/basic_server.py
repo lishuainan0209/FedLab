@@ -115,15 +115,15 @@ class SyncServerHandler(ServerHandler):
         sampled = self.sampler.sample(self.round_clients)
         self.round_clients = len(sampled)
 
-        assert self.num_clients_per_round == len(sampled)
+        assert self.num_clients_per_round == len(sampled) # 当条件为False时触发断言
         return sorted(sampled)
 
-    def global_update(self, buffer):
+    def _global_update(self, buffer):
         parameters_list = [ele[0] for ele in buffer]
         serialized_parameters = Aggregators.fedavg_aggregate(parameters_list)
         SerializationTool.deserialize_model(self._model, serialized_parameters)
 
-    def load(self, payload: List[torch.Tensor]) -> bool:
+    def aggregation_algorithm(self, payload: List[torch.Tensor]) -> bool:
         """Update global model with collected parameters from clients.
 
         Note:
@@ -140,8 +140,9 @@ class SyncServerHandler(ServerHandler):
 
         assert len(self.client_buffer_cache) <= self.num_clients_per_round
 
+        # 如果达到每轮聚合次数, 就进行聚合
         if len(self.client_buffer_cache) == self.num_clients_per_round:
-            self.global_update(self.client_buffer_cache)
+            self._global_update(self.client_buffer_cache)
             self.round += 1
 
             # reset cache
@@ -219,7 +220,7 @@ class AsyncServerHandler(ServerHandler):
         self.a = a
         self.b = b
 
-    def global_update(self, buffer):
+    def _global_update(self, buffer):
         client_model_parameters, model_time = buffer[0], buffer[1].item()
         """ "update global model from client_model_queue"""
         alpha_T = self.adapt_alpha(model_time)
@@ -228,8 +229,8 @@ class AsyncServerHandler(ServerHandler):
         )  # use aggregator
         SerializationTool.deserialize_model(self._model, aggregated_params)
 
-    def load(self, payload: List[torch.Tensor]) -> bool:
-        self.global_update(payload)
+    def aggregation_algorithm(self, payload: List[torch.Tensor]) -> bool:
+        self._global_update(payload)
         self.round += 1
 
     def adapt_alpha(self, receive_model_time):

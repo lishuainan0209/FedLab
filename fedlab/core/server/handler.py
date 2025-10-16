@@ -62,11 +62,11 @@ class ServerHandler(ModelMaintainer):
         raise NotImplementedError()
 
     @abstractmethod
-    def global_update(self, buffer):
+    def _global_update(self, buffer):
         raise NotImplementedError()
 
     @abstractmethod
-    def load(self, payload):
+    def aggregation_algorithm(self, payload):
         """Override this function to define how to update global model (aggregation or optimization)."""
         raise NotImplementedError()
 

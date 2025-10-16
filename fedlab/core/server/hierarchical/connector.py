@@ -185,12 +185,12 @@ class ClientConnector(Connector):
 
     def setup(self):
         super().setup()
-        rank_client_id_map = {}
+        rank_client_num_map = {}
 
         for rank in range(1, self._network.world_size):
             _, _, content = self._network.recv(src=rank)
-            rank_client_id_map[rank] = content[0].item()
-        self.coordinator = Coordinator(rank_client_id_map)
+            rank_client_num_map[rank] = content[0].item()
+        self.coordinator = Coordinator(rank_client_num_map)
 
         self.group_client_num = self.coordinator.total
 
