@@ -12,7 +12,7 @@ from ...utils.serialization import SerializationTool
 
 class FedAvgServerHandler(SyncServerHandler):
     """FedAvg server handler."""
-    def global_update(self, buffer):
+    def _global_update(self, buffer):
         parameters_list = [ele[0] for ele in buffer]
         weights = [ele[1] for ele in buffer]
         serialized_parameters = Aggregators.fedavg_aggregate(parameters_list, weights)
@@ -28,7 +28,7 @@ class FedAvgServerHandler(SyncServerHandler):
 
 class FedAvgClientTrainer(SGDClientTrainer):
     """Federated client with local SGD solver."""
-    def global_update(self, buffer):
+    def _global_update(self, buffer):
         parameters_list = [ele[0] for ele in buffer]
         weights = [ele[1] for ele in buffer]
         serialized_parameters = Aggregators.fedavg_aggregate(

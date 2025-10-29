@@ -38,8 +38,8 @@ class SyncServerHandler(ServerHandler):
     Args:
         model (torch.nn.Module): model trained by federated learning.
         global_round (int): stop condition. Shut down FL system when global round is reached.
-        num_clients (int): number of clients in FL. Default: 0 (initialized external).
-        sample_ratio (float): the result of ``sample_ratio * num_clients`` is the number of clients for every FL round.
+        total_clients (int): number of clients in FL. Default: 0 (initialized external).
+        sample_ratio (float): the result of ``sample_ratio * total_clients`` is the number of clients for every FL round.
         cuda (bool): use GPUs or not. Default: ``False``.
         device (str, optional): assign model/data to the given GPUs. E.g., 'device:0' or 'device:0,1'. Defaults to None. If device is None and cuda is True, FedLab will set the gpu with the largest memory as default.
         sampler (FedSampler, optional): assign a sampler to define the client sampling strategy. Default: random sampling with :class:`FedSampler`.
@@ -50,7 +50,7 @@ class SyncServerHandler(ServerHandler):
         self,
         model: torch.nn.Module,
         global_round: int,
-        num_clients: int = 0,
+        total_clients: int = 0,
         sample_ratio: float = 1,
         cuda: bool = False,
         device: str = None,
@@ -63,13 +63,13 @@ class SyncServerHandler(ServerHandler):
         assert 0.0 <= sample_ratio <= 1.0
 
         # basic setting
-        self.num_clients = num_clients
+        self.total_clients = total_clients
         self.sample_ratio = sample_ratio
         self.sampler = sampler
 
         # client buffer
         self.round_clients = max(
-            1, int(self.sample_ratio * self.num_clients)
+            1, int(self.sample_ratio * self.total_clients)
         )  # for dynamic client sampling
         self.client_buffer_cache = []
 
@@ -83,7 +83,7 @@ class SyncServerHandler(ServerHandler):
         return [self.model_parameters]
 
     @property
-    def num_clients_per_round(self):
+    def clients_num_per_round(self):
         return self.round_clients
 
     @property
@@ -91,39 +91,32 @@ class SyncServerHandler(ServerHandler):
         """:class:`NetworkManager` keeps monitoring this attribute, and it will stop all related processes and threads when ``True`` returned."""
         return self.round >= self.global_round
 
-    # for built-in sampler
-    # @property
-    # def num_clients_per_round(self):
-    #     return max(1, int(self.sample_ratio * self.num_clients))
-
-    # def setup_optim(self, num_clients):
-    #     self.num_clients = num_clients
 
     def sample_clients(self, num_to_sample=None):
         """Return a list of client rank indices selected randomly. The client ID is from ``0`` to
-        ``self.num_clients -1``."""
-        # selection = random.sample(range(self.num_clients),
-        #                           self.num_clients_per_round)
+        ``self.total_clients -1``."""
+        # selection = random.sample(range(self.total_clients),
+        #                           self.clients_num_per_round)
         # If the number of clients per round is not fixed, please change the value of self.sample_ratio correspondly.
-        # self.sample_ratio = float(len(selection))/self.num_clients
-        # assert self.num_clients_per_round == len(selection)
+        # self.sample_ratio = float(len(selection))/self.total_clients
+        # assert self.clients_num_per_round == len(selection)
 
         if self.sampler is None:
-            self.sampler = RandomSampler(self.num_clients)
+            self.sampler = RandomSampler(self.total_clients)
         # new version with built-in sampler
         num_to_sample = self.round_clients if num_to_sample is None else num_to_sample
         sampled = self.sampler.sample(self.round_clients)
         self.round_clients = len(sampled)
 
-        assert self.num_clients_per_round == len(sampled)
+        assert self.clients_num_per_round == len(sampled)# 当条件为False时触发断言
         return sorted(sampled)
 
-    def global_update(self, buffer):
+    def _global_update(self, buffer):
         parameters_list = [ele[0] for ele in buffer]
         serialized_parameters = Aggregators.fedavg_aggregate(parameters_list)
         SerializationTool.deserialize_model(self._model, serialized_parameters)
 
-    def load(self, payload: List[torch.Tensor]) -> bool:
+    def aggregation_process(self, payload: List[torch.Tensor]) -> bool:
         """Update global model with collected parameters from clients.
 
         Note:
@@ -138,10 +131,10 @@ class SyncServerHandler(ServerHandler):
         assert len(payload) > 0
         self.client_buffer_cache.append(deepcopy(payload))
 
-        assert len(self.client_buffer_cache) <= self.num_clients_per_round
+        assert len(self.client_buffer_cache) <= self.clients_num_per_round
 
-        if len(self.client_buffer_cache) == self.num_clients_per_round:
-            self.global_update(self.client_buffer_cache)
+        if len(self.client_buffer_cache) == self.clients_num_per_round:
+            self._global_update(self.client_buffer_cache)
             self.round += 1
 
             # reset cache
@@ -174,7 +167,7 @@ class AsyncServerHandler(ServerHandler):
     Args:
         model (torch.nn.Module): Global model in server
         global_round (int): stop condition. Shut down FL system when global round is reached.
-        num_clients (int): number of clients in FL.
+        total_clients (int): number of clients in FL.
         cuda (bool): Use GPUs or not.
         device (str, optional): Assign model/data to the given GPUs. E.g., 'device:0' or 'device:0,1'. Defaults to None. If device is None and cuda is True, FedLab will set the gpu with the largest memory as default.
         logger (Logger, optional): Object of :class:`Logger`.
@@ -184,14 +177,14 @@ class AsyncServerHandler(ServerHandler):
         self,
         model: torch.nn.Module,
         global_round: int,
-        num_clients: int,
+        total_clients: int,
         cuda: bool = False,
         device: str = None,
         logger: Logger = None,
     ):
         super(AsyncServerHandler, self).__init__(model, cuda, device)
         self._LOGGER = Logger() if logger is None else logger
-        self.num_clients = num_clients
+        self.total_clients = total_clients
         self.round = 0
         self.global_round = global_round
 
@@ -219,7 +212,7 @@ class AsyncServerHandler(ServerHandler):
         self.a = a
         self.b = b
 
-    def global_update(self, buffer):
+    def _global_update(self, buffer):
         client_model_parameters, model_time = buffer[0], buffer[1].item()
         """ "update global model from client_model_queue"""
         alpha_T = self.adapt_alpha(model_time)
@@ -228,8 +221,8 @@ class AsyncServerHandler(ServerHandler):
         )  # use aggregator
         SerializationTool.deserialize_model(self._model, aggregated_params)
 
-    def load(self, payload: List[torch.Tensor]) -> bool:
-        self.global_update(payload)
+    def aggregation_process(self, payload: List[torch.Tensor]) -> bool:
+        self._global_update(payload)
         self.round += 1
 
     def adapt_alpha(self, receive_model_time):

@@ -29,23 +29,23 @@ class PathologicalMNIST(FedDataset):
     Args:
         root (str): Path to download raw dataset.
         path (str): Path to save partitioned subdataset.
-        num_clients (int): Number of clients.
+        total_clients (int): Number of clients.
         shards (int, optional): Sort the dataset by the label, and uniformly partition them into shards. Then
         download (bool, optional): Download. Defaults to True.
     """
 
     def __init__(
-        self, root, path, num_clients=100, shards=200, download=True, preprocess=False
+        self, root, path, total_clients=100, shards=200, download=True, preprocess=False
     ) -> None:
         self.root = os.path.expanduser(root)
         self.path = path
-        self.num_clients = num_clients
+        self.total_clients = total_clients
         self.shards = shards
         if preprocess:
-            self.preprocess(num_clients, shards, download)
+            self.preprocess(total_clients, shards, download)
 
     def preprocess(self, download=True):
-        # self.num_clients = num_clients
+        # self.total_clients = total_clients
         # self.shards = shards
         self.download = download
 
@@ -64,7 +64,7 @@ class PathologicalMNIST(FedDataset):
             download=self.download,
             transform=transforms.ToTensor(),
         )
-        data_indices = noniid_slicing(mnist, self.num_clients, self.shards)
+        data_indices = noniid_slicing(mnist, self.total_clients, self.shards)
 
         samples, labels = [], []
         for x, y in mnist:
@@ -95,7 +95,7 @@ class PathologicalMNIST(FedDataset):
         test_dataset = BaseDataset(test_samples, test_labels)
         torch.save(test_dataset, os.path.join(self.path, "test", "test.pkl"))
 
-    def get_dataset(self, id=None, type="train"):
+    def _get_dataset(self, id=None, type="train"):
         """Load subdataset for client with client ID ``cid`` from local file.
 
         Args:
@@ -119,7 +119,7 @@ class PathologicalMNIST(FedDataset):
             batch_size (int, optional): batch size in DataLoader.
             type (str, optional): Dataset type, can be ``"train"``, ``"val"`` or ``"test"``. Default as ``"train"``.
         """
-        dataset = self.get_dataset(id, type)
+        dataset = self._get_dataset(id, type)
         batch_size = len(dataset) if batch_size is None else batch_size
         data_loader = DataLoader(dataset, batch_size=batch_size)
         return data_loader

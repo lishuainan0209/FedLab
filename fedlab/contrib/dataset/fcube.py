@@ -34,7 +34,7 @@ class FCUBE(Dataset):
     """
     train_files = {'data': "fcube_train_X", 'targets': "fcube_train_y"}
     test_files = {'data': "fcube_test_X", 'targets': "fcube_test_y"}
-    num_clients = 4  # only for 4 clients
+    total_clients = 4  # only for 4 clients
 
     def __init__(self, root, train=True, generate=True, transform=None, target_transform=None,
                  num_samples=4000):

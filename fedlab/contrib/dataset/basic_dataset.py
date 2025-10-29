@@ -118,7 +118,7 @@ class FedDataset(object):
             os.mkdir(os.path.join(self.path, "var"))
             os.mkdir(os.path.join(self.path, "test"))
 
-    def get_dataset(self, id, type="train"):
+    def _get_dataset(self, id, type="train"):
         """Get dataset class
 
         Args:

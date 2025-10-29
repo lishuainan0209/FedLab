@@ -26,12 +26,12 @@ class PowerofchoicePipeline(StandalonePipeline):
             broadcast = self.handler.downlink_package
 
             # client side
-            self.trainer.local_process(broadcast, sampled_clients)
+            self.trainer.train_process(broadcast, sampled_clients)
             uploads = self.trainer.uplink_package
 
             # server side
             for pack in uploads:
-                self.handler.load(pack)
+                self.handler.aggregation_process(pack)
 
 
 #####################
@@ -46,14 +46,14 @@ class Powerofchoice(SyncServerHandler):
         self.d = d # the number of candidate
 
     def sample_candidates(self):
-        selection = random.sample(range(self.num_clients), self.d)
+        selection = random.sample(range(self.total_clients), self.d)
         selection = sorted(selection)
         return selection
 
     def sample_clients(self, candidates, losses):
         sort = np.array(losses).argsort().tolist()
         sort.reverse()
-        selected_clients = np.array(candidates)[sort][0:self.num_clients_per_round]
+        selected_clients = np.array(candidates)[sort][0:self.clients_num_per_round]
         return selected_clients.tolist()
 
 

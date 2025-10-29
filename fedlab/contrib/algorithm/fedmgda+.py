@@ -10,7 +10,7 @@ from ...utils.serialization import SerializationTool
 
 class FedMGDAServerHandler(SyncServerHandler):
     def setup_optim(self, sampler, lr):
-        self.n = self.num_clients
+        self.n = self.total_clients
         self.num_to_sample = int(self.sample_ratio * self.n)
         self.round_clients = int(self.sample_ratio * self.n)
         self.sampler = sampler
@@ -19,16 +19,16 @@ class FedMGDAServerHandler(SyncServerHandler):
         self.solver = MinNormSolver
 
     @property
-    def num_clients_per_round(self):
+    def clients_num_per_round(self):
         return self.round_clients
 
     def sample_clients(self, num_to_sample=None):
         clients = self.sampler.sample(self.num_to_sample)
         self.round_clients = len(clients)
-        assert self.num_clients_per_round == len(clients)
+        assert self.clients_num_per_round == len(clients)
         return clients
 
-    def global_update(self, buffer):
+    def _global_update(self, buffer):
         gradient_list = [
             torch.sub(self.model_parameters, ele[0]) for ele in buffer
         ]

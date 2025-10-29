@@ -47,7 +47,7 @@ class ServerHandler(ModelMaintainer):
 
     # only sync handler need this property
     # @property
-    # def num_clients_per_round(self):
+    # def clients_num_per_round(self):
     #     return self.round_clients
 
     @property
@@ -62,11 +62,11 @@ class ServerHandler(ModelMaintainer):
         raise NotImplementedError()
 
     @abstractmethod
-    def global_update(self, buffer):
+    def _global_update(self, buffer):
         raise NotImplementedError()
 
     @abstractmethod
-    def load(self, payload):
+    def aggregation_process(self, payload):
         """Override this function to define how to update global model (aggregation or optimization)."""
         raise NotImplementedError()
 

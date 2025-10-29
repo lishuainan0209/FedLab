@@ -28,10 +28,10 @@ class FedOptServerHandler(FedAvgServerHandler):
         assert self.option in ["adagrad", "yogi", "adam"]
 
     @property
-    def num_clients_per_round(self):
+    def clients_num_per_round(self):
         return self.round_clients
 
-    def local_process(self, payload, id_list):
+    def train_process(self, payload, id_list):
         model_parameters = payload[0]
         loss_ = AverageMeter()
         acc_ = AverageMeter()
@@ -41,7 +41,7 @@ class FedOptServerHandler(FedAvgServerHandler):
             self.cache.append(pack)
         return loss_, acc_
 
-    def global_update(self, buffer):
+    def _global_update(self, buffer):
         gradient_list = [
             torch.sub(ele[0], self.model_parameters) for ele in buffer
         ]

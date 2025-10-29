@@ -38,7 +38,7 @@ class IFCAServerHander(SyncServerHandler):
         self.global_models = init_parameters
         self.shared_paramters = Aggregators.fedavg_aggregate(self.global_models)[0:self.share_size]
 
-    def global_update(self, buffer):
+    def _global_update(self, buffer):
         cluster_model = [[] for _ in range(self.k)]
         # weights = [[] for _ in range(self.k)]
         for i, (cid, id, paramters) in enumerate(buffer):
@@ -70,7 +70,7 @@ class IFCASerialClientTrainer(SGDSerialClientTrainer):
     def setup_optim(self, epochs, batch_size, lr):
         return super().setup_optim(epochs, batch_size, lr)
 
-    def local_process(self, payload, id_list):
+    def train_process(self, payload, id_list):
         shared_model = payload[0]
         payload = payload[1:0]
 

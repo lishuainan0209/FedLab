@@ -28,7 +28,7 @@ class StandalonePipeline(object):
         self.trainer = trainer
 
         # initialization
-        self.handler.num_clients = self.trainer.num_clients
+        self.handler.total_clients = self.trainer.num_clients
 
     def main(self):
         while self.handler.if_stop is False:
@@ -38,11 +38,12 @@ class StandalonePipeline(object):
 
             # client side
             self.trainer.local_process(broadcast, sampled_clients)
+            # todo uploads 这个名字不好
             uploads = self.trainer.uplink_package
 
             # server side
             for pack in uploads:
-                self.handler.load(pack)
+                self.handler.aggregation_process(pack)
 
             # evaluate
             self.evaluate()

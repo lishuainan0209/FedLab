@@ -17,7 +17,7 @@ class FedNovaServerHandler(SyncServerHandler):
     def setup_optim(self, option="weighted_scale"):
         self.option = option  # weighted_scale, uniform, weighted_com
 
-    def global_update(self, buffer):
+    def _global_update(self, buffer):
         models = [elem[0] for elem in buffer]
         taus = [elem[1] for elem in buffer]
 
@@ -25,13 +25,13 @@ class FedNovaServerHandler(SyncServerHandler):
 
         # p is the FedAvg weight, we simply set it 1/m here.
         p = [
-            1.0 / self.num_clients_per_round
-            for _ in range(self.num_clients_per_round)
+            1.0 / self.clients_num_per_round
+            for _ in range(self.clients_num_per_round)
         ]
 
         if self.option == 'weighted_scale':
             K = len(deltas)
-            N = self.num_clients
+            N = self.total_clients
             tau_eff = sum([tauk * pk for tauk, pk in zip(taus, p)])
             delta = sum([dk * pk
                                         for dk, pk in zip(deltas, p)]) * N / K
@@ -63,7 +63,7 @@ class FedNovaServerHandler(SyncServerHandler):
 class FedNovaSerialClientTrainer(SGDSerialClientTrainer):
     """Federated client with local SGD solver."""
 
-    def local_process(self, payload, id_list):
+    def train_process(self, payload, id_list):
         model_parameters = payload[0]
         for id in id_list:
             data_loader = self.dataset.get_dataloader(id, self.batch_size)

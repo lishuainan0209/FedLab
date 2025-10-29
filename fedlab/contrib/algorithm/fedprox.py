@@ -29,7 +29,7 @@ class FedProxClientTrainer(SGDClientTrainer):
         super().setup_optim(epochs, batch_size, lr)
         self.mu = mu
 
-    def local_process(self, payload, id):
+    def train_process(self, payload, id):
         model_parameters = payload[0]
         train_loader = self.dataset.get_dataloader(id, self.batch_size)
         self.train(model_parameters, train_loader, self.mu)
@@ -67,7 +67,7 @@ class FedProxSerialClientTrainer(SGDSerialClientTrainer):
         super().setup_optim(epochs, batch_size, lr)
         self.mu = mu
 
-    def local_process(self, payload, id_list):
+    def train_process(self, payload, id_list):
         model_parameters = payload[0]
         for id in id_list:
             data_loader = self.dataset.get_dataloader(id, self.batch_size)

@@ -31,7 +31,7 @@ class PartitionedMNIST(FedDataset):
     Args:
         root (str): Path to download raw dataset.
         path (str): Path to save partitioned subdataset.
-        num_clients (int): Number of clients.
+        total_clients (int): Number of clients.
         download (bool): Whether to download the raw dataset.
         preprocess (bool): Whether to preprocess the dataset.
         partition (str, optional): Partition name. Only supports ``"noniid-#label"``, ``"noniid-labeldir"``, ``"unbalance"`` and ``"iid"`` partition schemes.
@@ -44,7 +44,7 @@ class PartitionedMNIST(FedDataset):
     def __init__(self,
                  root,
                  path,
-                 num_clients,
+                 total_clients,
                  download=True,
                  preprocess=False,
                  partition="iid",
@@ -56,7 +56,7 @@ class PartitionedMNIST(FedDataset):
 
         self.root = os.path.expanduser(root)
         self.path = path
-        self.num_clients = num_clients
+        self.total_clients = total_clients
         self.transform = transform
         self.targt_transform = target_transform
 
@@ -94,7 +94,7 @@ class PartitionedMNIST(FedDataset):
                                                 download=download)
 
         partitioner = MNISTPartitioner(trainset.targets,
-                                        self.num_clients,
+                                        self.total_clients,
                                         partition=partition,
                                         dir_alpha=dir_alpha,
                                         verbose=verbose,
@@ -106,14 +106,14 @@ class PartitionedMNIST(FedDataset):
                         partitioner.client_dict[cid],
                         transform=transform,
                         target_transform=target_transform)
-            for cid in range(self.num_clients)
+            for cid in range(self.total_clients)
         }
         for cid in subsets:
             torch.save(
                 subsets[cid],
                 os.path.join(self.path, "train", "data{}.pkl".format(cid)))
 
-    def get_dataset(self, cid, type="train"):
+    def _get_dataset(self, cid, type="train"):
         """Load subdataset for client with client ID ``cid`` from local file.
 
         Args:
@@ -135,7 +135,7 @@ class PartitionedMNIST(FedDataset):
             batch_size (int, optional): batch size in DataLoader.
             type (str, optional): Dataset type, can be ``"train"``, ``"val"`` or ``"test"``. Default as ``"train"``.
         """
-        dataset = self.get_dataset(cid, type)
+        dataset = self._get_dataset(cid, type)
         batch_size = len(dataset) if batch_size is None else batch_size
         data_loader = DataLoader(dataset, batch_size=batch_size)
         return data_loader

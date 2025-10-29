@@ -25,7 +25,7 @@ setup(
         "numpy",
         "pandas",
         "scikit-learn",
-        "pynvml",
+        "nvidia-ml-py",
         "tqdm",
         "scikit-learn",
         "munch",

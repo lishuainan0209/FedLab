@@ -38,75 +38,75 @@ def split_indices(num_cumsum, rand_perm):
     return client_dict
 
 
-def balance_split(num_clients, num_samples):
+def balance_split(total_clients, num_samples):
     """Assign same sample sample for each client.
 
     Args:
-        num_clients (int): Number of clients for partition.
+        total_clients (int): Number of clients for partition.
         num_samples (int): Total number of samples.
 
     Returns:
-        numpy.ndarray: A numpy array consisting ``num_clients`` integer elements, each represents sample number of corresponding clients.
+        numpy.ndarray: A numpy array consisting ``total_clients`` integer elements, each represents sample number of corresponding clients.
 
     """
-    num_samples_per_client = int(num_samples / num_clients)
-    client_sample_nums = (np.ones(num_clients) * num_samples_per_client).astype(
+    num_samples_per_client = int(num_samples / total_clients)
+    client_sample_nums = (np.ones(total_clients) * num_samples_per_client).astype(
         int)
     return client_sample_nums
 
 
-def lognormal_unbalance_split(num_clients, num_samples, unbalance_sgm):
+def lognormal_unbalance_split(total_clients, num_samples, unbalance_sgm):
     """Assign different sample number for each client using Log-Normal distribution.
 
     Sample numbers for clients are drawn from Log-Normal distribution.
 
     Args:
-        num_clients (int): Number of clients for partition.
+        total_clients (int): Number of clients for partition.
         num_samples (int): Total number of samples.
         unbalance_sgm (float): Log-normal variance. When equals to ``0``, the partition is equal to :func:`balance_partition`.
 
     Returns:
-        numpy.ndarray: A numpy array consisting ``num_clients`` integer elements, each represents sample number of corresponding clients.
+        numpy.ndarray: A numpy array consisting ``total_clients`` integer elements, each represents sample number of corresponding clients.
 
     """
-    num_samples_per_client = int(num_samples / num_clients)
+    num_samples_per_client = int(num_samples / total_clients)
     if unbalance_sgm != 0:
         client_sample_nums = np.random.lognormal(mean=np.log(num_samples_per_client),
                                                  sigma=unbalance_sgm,
-                                                 size=num_clients)
+                                                 size=total_clients)
         client_sample_nums = (
                 client_sample_nums / np.sum(client_sample_nums) * num_samples).astype(int)
         diff = np.sum(client_sample_nums) - num_samples  # diff <= 0
 
         # Add/Subtract the excess number starting from first client
         if diff != 0:
-            for cid in range(num_clients):
+            for cid in range(total_clients):
                 if client_sample_nums[cid] > diff:
                     client_sample_nums[cid] -= diff
                     break
     else:
-        client_sample_nums = (np.ones(num_clients) * num_samples_per_client).astype(int)
+        client_sample_nums = (np.ones(total_clients) * num_samples_per_client).astype(int)
 
     return client_sample_nums
 
 
-def dirichlet_unbalance_split(num_clients, num_samples, alpha):
+def dirichlet_unbalance_split(total_clients, num_samples, alpha):
     """Assign different sample number for each client using Dirichlet distribution.
 
     Sample numbers for clients are drawn from Dirichlet distribution.
 
     Args:
-        num_clients (int): Number of clients for partition.
+        total_clients (int): Number of clients for partition.
         num_samples (int): Total number of samples.
         alpha (float): Dirichlet concentration parameter
 
     Returns:
-        numpy.ndarray: A numpy array consisting ``num_clients`` integer elements, each represents sample number of corresponding clients.
+        numpy.ndarray: A numpy array consisting ``total_clients`` integer elements, each represents sample number of corresponding clients.
 
     """
     min_size = 0
     while min_size < 10:
-        proportions = np.random.dirichlet(np.repeat(alpha, num_clients))
+        proportions = np.random.dirichlet(np.repeat(alpha, total_clients))
         proportions = proportions / proportions.sum()
         min_size = np.min(proportions * num_samples)
 
@@ -131,7 +131,7 @@ def homo_partition(client_sample_nums, num_samples):
     return client_dict
 
 
-def hetero_dir_partition(targets, num_clients, num_classes, dir_alpha, min_require_size=None):
+def hetero_dir_partition(targets, total_clients, num_classes, dir_alpha, min_require_size=None):
     """
 
     Non-iid partition based on Dirichlet distribution. The method is from "hetero-dir" partition of
@@ -147,7 +147,7 @@ def hetero_dir_partition(targets, num_clients, num_classes, dir_alpha, min_requi
 
     Args:
         targets (list or numpy.ndarray): Sample targets. Unshuffled preferred.
-        num_clients (int): Number of clients for partition.
+        total_clients (int): Number of clients for partition.
         num_classes (int): Number of classes in samples.
         dir_alpha (float): Parameter alpha for Dirichlet distribution.
         min_require_size (int, optional): Minimum required sample number for each client. If set to ``None``, then equals to ``num_classes``.
@@ -164,16 +164,16 @@ def hetero_dir_partition(targets, num_clients, num_classes, dir_alpha, min_requi
 
     min_size = 0
     while min_size < min_require_size:
-        idx_batch = [[] for _ in range(num_clients)]
+        idx_batch = [[] for _ in range(total_clients)]
         # for each class in the dataset
         for k in range(num_classes):
             idx_k = np.where(targets == k)[0]
             np.random.shuffle(idx_k)
             proportions = np.random.dirichlet(
-                np.repeat(dir_alpha, num_clients))
+                np.repeat(dir_alpha, total_clients))
             # Balance
             proportions = np.array(
-                [p * (len(idx_j) < num_samples / num_clients) for p, idx_j in
+                [p * (len(idx_j) < num_samples / total_clients) for p, idx_j in
                  zip(proportions, idx_batch)])
             proportions = proportions / proportions.sum()
             proportions = (np.cumsum(proportions) * len(idx_k)).astype(int)[:-1]
@@ -182,19 +182,19 @@ def hetero_dir_partition(targets, num_clients, num_classes, dir_alpha, min_requi
             min_size = min([len(idx_j) for idx_j in idx_batch])
 
     client_dict = dict()
-    for cid in range(num_clients):
+    for cid in range(total_clients):
         np.random.shuffle(idx_batch[cid])
         client_dict[cid] = np.array(idx_batch[cid])
 
     return client_dict
 
 
-def shards_partition(targets, num_clients, num_shards):
+def shards_partition(targets, total_clients, num_shards):
     """Non-iid partition used in FedAvg `paper <https://arxiv.org/abs/1602.05629>`_.
 
     Args:
         targets (list or numpy.ndarray): Sample targets. Unshuffled preferred.
-        num_clients (int): Number of clients for partition.
+        total_clients (int): Number of clients for partition.
         num_shards (int): Number of shards in partition.
 
     Returns:
@@ -210,9 +210,9 @@ def shards_partition(targets, num_clients, num_shards):
         warnings.warn("warning: length of dataset isn't divided exactly by num_shards. "
                       "Some samples will be dropped.")
 
-    shards_per_client = int(num_shards / num_clients)
-    if num_shards % num_clients != 0:
-        warnings.warn("warning: num_shards isn't divided exactly by num_clients. "
+    shards_per_client = int(num_shards / total_clients)
+    if num_shards % total_clients != 0:
+        warnings.warn("warning: num_shards isn't divided exactly by total_clients. "
                       "Some shards will be dropped.")
 
     indices = np.arange(num_samples)
@@ -224,7 +224,7 @@ def shards_partition(targets, num_clients, num_shards):
 
     # permute shards idx, and slice shards_per_client shards for each client
     rand_perm = np.random.permutation(num_shards)
-    num_client_shards = np.ones(num_clients) * shards_per_client
+    num_client_shards = np.ones(total_clients) * shards_per_client
     # sample index must be int
     num_cumsum = np.cumsum(num_client_shards).astype(int)
     # shard indices for each client
@@ -232,7 +232,7 @@ def shards_partition(targets, num_clients, num_shards):
 
     # map shard idx to sample idx for each client
     client_dict = dict()
-    for cid in range(num_clients):
+    for cid in range(total_clients):
         shards_set = client_shards_dict[cid]
         current_indices = [
             sorted_indices[shard_id * size_shard: (shard_id + 1) * size_shard]
@@ -242,7 +242,7 @@ def shards_partition(targets, num_clients, num_shards):
     return client_dict
 
 
-def client_inner_dirichlet_partition(targets, num_clients, num_classes, dir_alpha,
+def client_inner_dirichlet_partition(targets, total_clients, num_classes, dir_alpha,
                                      client_sample_nums, verbose=True):
     """Non-iid Dirichlet partition.
 
@@ -252,10 +252,10 @@ def client_inner_dirichlet_partition(targets, num_clients, num_classes, dir_alph
 
     Args:
         targets (list or numpy.ndarray): Sample targets.
-        num_clients (int): Number of clients for partition.
+        total_clients (int): Number of clients for partition.
         num_classes (int): Number of classes in samples.
         dir_alpha (float): Parameter alpha for Dirichlet distribution.
-        client_sample_nums (numpy.ndarray): A numpy array consisting ``num_clients`` integer elements, each represents sample number of corresponding clients.
+        client_sample_nums (numpy.ndarray): A numpy array consisting ``total_clients`` integer elements, each represents sample number of corresponding clients.
         verbose (bool, optional): Whether to print partition process. Default as ``True``.
 
     Returns:
@@ -266,16 +266,16 @@ def client_inner_dirichlet_partition(targets, num_clients, num_classes, dir_alph
         targets = np.array(targets)
 
     class_priors = np.random.dirichlet(alpha=[dir_alpha] * num_classes,
-                                       size=num_clients)
+                                       size=total_clients)
     prior_cumsum = np.cumsum(class_priors, axis=1)
     idx_list = [np.where(targets == i)[0] for i in range(num_classes)]
     class_amount = [len(idx_list[i]) for i in range(num_classes)]
 
     client_indices = [np.zeros(client_sample_nums[cid]).astype(np.int64) for cid in
-                      range(num_clients)]
+                      range(total_clients)]
 
     while np.sum(client_sample_nums) != 0:
-        curr_cid = np.random.randint(num_clients)
+        curr_cid = np.random.randint(total_clients)
         # If current node is full resample a client
         if verbose:
             print('Remaining Data: %d' % np.sum(client_sample_nums))
@@ -294,11 +294,11 @@ def client_inner_dirichlet_partition(targets, num_clients, num_classes, dir_alph
 
             break
 
-    client_dict = {cid: client_indices[cid] for cid in range(num_clients)}
+    client_dict = {cid: client_indices[cid] for cid in range(total_clients)}
     return client_dict
 
 
-def client_inner_dirichlet_partition_faster(targets, num_clients, num_classes, dir_alpha,
+def client_inner_dirichlet_partition_faster(targets, total_clients, num_classes, dir_alpha,
                                      client_sample_nums, verbose=True):
     """Non-iid Dirichlet partition.
 
@@ -308,10 +308,10 @@ def client_inner_dirichlet_partition_faster(targets, num_clients, num_classes, d
 
     Args:
         targets (list or numpy.ndarray): Sample targets.
-        num_clients (int): Number of clients for partition.
+        total_clients (int): Number of clients for partition.
         num_classes (int): Number of classes in samples.
         dir_alpha (float): Parameter alpha for Dirichlet distribution.
-        client_sample_nums (numpy.ndarray): A numpy array consisting ``num_clients`` integer elements, each represents sample number of corresponding clients.
+        client_sample_nums (numpy.ndarray): A numpy array consisting ``total_clients`` integer elements, each represents sample number of corresponding clients.
         verbose (bool, optional): Whether to print partition process. Default as ``True``.
 
     Returns:
@@ -322,16 +322,16 @@ def client_inner_dirichlet_partition_faster(targets, num_clients, num_classes, d
         targets = np.array(targets)
 
     class_priors = np.random.dirichlet(alpha=[dir_alpha] * num_classes,
-                                       size=num_clients)
+                                       size=total_clients)
     prior_cumsum = np.cumsum(class_priors, axis=1)
     idx_list = [np.where(targets == i)[0] for i in range(num_classes)]
     class_amount = [len(idx_list[i]) for i in range(num_classes)]
 
     client_indices = [np.zeros(client_sample_nums[cid]).astype(np.int64) for cid in
-                      range(num_clients)]
+                      range(total_clients)]
 
     while np.sum(client_sample_nums) != 0:
-        curr_cid = np.random.randint(num_clients)
+        curr_cid = np.random.randint(total_clients)
         # If current node is full resample a client
         if verbose:
             print('Remaining Data: %d' % np.sum(client_sample_nums))
@@ -355,18 +355,18 @@ def client_inner_dirichlet_partition_faster(targets, num_clients, num_classes, d
 
             break
 
-    client_dict = {cid: client_indices[cid] for cid in range(num_clients)}
+    client_dict = {cid: client_indices[cid] for cid in range(total_clients)}
     return client_dict
 
 
-def label_skew_quantity_based_partition(targets, num_clients, num_classes, major_classes_num):
+def label_skew_quantity_based_partition(targets, total_clients, num_classes, major_classes_num):
     """Label-skew:quantity-based partition.
 
     For details, please check `Federated Learning on Non-IID Data Silos: An Experimental Study <https://arxiv.org/abs/2102.02079>`_.
 
     Args:
         targets (List or np.ndarray): Labels od dataset.
-        num_clients (int): Number of clients.
+        total_clients (int): Number of clients.
         num_classes (int): Number of unique classes.
         major_classes_num (int): Number of classes for each client, should be less then ``num_classes``.
 
@@ -377,12 +377,12 @@ def label_skew_quantity_based_partition(targets, num_clients, num_classes, major
     if not isinstance(targets, np.ndarray):
         targets = np.array(targets)
 
-    idx_batch = [np.ndarray(0, dtype=np.int64) for _ in range(num_clients)]
+    idx_batch = [np.ndarray(0, dtype=np.int64) for _ in range(total_clients)]
     # only for major_classes_num < num_classes.
     # if major_classes_num = num_classes, it equals to IID partition
     times = [0 for _ in range(num_classes)]
     contain = []
-    for cid in range(num_clients):
+    for cid in range(total_clients):
         current = [cid % num_classes]
         times[cid % num_classes] += 1
         j = 1
@@ -399,12 +399,12 @@ def label_skew_quantity_based_partition(targets, num_clients, num_classes, major
         np.random.shuffle(idx_k)
         split = np.array_split(idx_k, times[k])
         ids = 0
-        for cid in range(num_clients):
+        for cid in range(total_clients):
             if k in contain[cid]:
                 idx_batch[cid] = np.append(idx_batch[cid], split[ids])
                 ids += 1
 
-    client_dict = {cid: idx_batch[cid] for cid in range(num_clients)}
+    client_dict = {cid: idx_batch[cid] for cid in range(total_clients)}
     return client_dict
 
 
@@ -419,8 +419,8 @@ def fcube_synthetic_partition(data):
     Returns:
         dict: ``{ client_id: indices}``.
     """
-    num_clients = 4
-    client_indices = [[] for _ in range(num_clients)]
+    total_clients = 4
+    client_indices = [[] for _ in range(total_clients)]
     for idx, sample in enumerate(data):
         p1, p2, p3 = sample
         if (p1 > 0 and p2 > 0 and p3 > 0) or (p1 < 0 and p2 < 0 and p3 < 0):
@@ -431,40 +431,40 @@ def fcube_synthetic_partition(data):
             client_indices[2].append(idx)
         else:
             client_indices[3].append(idx)
-    client_dict = {cid: np.array(client_indices[cid]).astype(int) for cid in range(num_clients)}
+    client_dict = {cid: np.array(client_indices[cid]).astype(int) for cid in range(total_clients)}
     return client_dict
 
 
-def samples_num_count(client_dict, num_clients):
+def samples_num_count(client_dict, total_clients):
     """Return sample count for all clients in ``client_dict``.
 
     Args:
         client_dict (dict): Data partition result for different clients.
-        num_clients (int): Total number of clients.
+        total_clients (int): Total number of clients.
 
     Returns:
         pandas.DataFrame
 
     """
     client_samples_nums = [[cid, client_dict[cid].shape[0]] for cid in
-                           range(num_clients)]
+                           range(total_clients)]
     client_sample_count = pd.DataFrame(data=client_samples_nums,
                                        columns=['client', 'num_samples']).set_index('client')
     return client_sample_count
 
-def noniid_slicing(dataset, num_clients, num_shards):
+def noniid_slicing(dataset, total_clients, num_shards):
     """Slice a dataset for non-IID.
     
     Args:
         dataset (torch.utils.data.Dataset): Dataset to slice.
-        num_clients (int):  Number of client.
+        total_clients (int):  Number of client.
         num_shards (int): Number of shards.
     
     Notes:
         The size of a shard equals to ``int(len(dataset)/num_shards)``.
-        Each client will get ``int(num_shards/num_clients)`` shards.
+        Each client will get ``int(num_shards/total_clients)`` shards.
 
-    Returns：
+    Returns:
         dict: ``{ 0: indices of dataset, 1: indices of dataset, ..., k: indices of dataset }``
     """
     total_sample_nums = len(dataset)
@@ -474,13 +474,13 @@ def noniid_slicing(dataset, num_clients, num_shards):
             "warning: the length of dataset isn't divided exactly by num_shard.some samples will be dropped."
         )
     # the number of shards that each one of clients can get
-    shard_pc = int(num_shards / num_clients)
-    if num_shards % num_clients != 0:
+    shard_pc = int(num_shards / total_clients)
+    if num_shards % total_clients != 0:
         warnings.warn(
-            "warning: num_shard isn't divided exactly by num_clients. some samples will be dropped."
+            "warning: num_shard isn't divided exactly by total_clients. some samples will be dropped."
         )
 
-    dict_users = {i: np.array([], dtype='int64') for i in range(num_clients)}
+    dict_users = {i: np.array([], dtype='int64') for i in range(total_clients)}
 
     labels = np.array(dataset.targets)
     idxs = np.arange(total_sample_nums)
@@ -492,7 +492,7 @@ def noniid_slicing(dataset, num_clients, num_shards):
 
     # assign
     idx_shard = [i for i in range(num_shards)]
-    for i in range(num_clients):
+    for i in range(total_clients):
         rand_set = set(np.random.choice(idx_shard, shard_pc, replace=False))
         idx_shard = list(set(idx_shard) - rand_set)
         for rand in rand_set:
@@ -504,19 +504,19 @@ def noniid_slicing(dataset, num_clients, num_shards):
     return dict_users
 
 
-def random_slicing(dataset, num_clients):
+def random_slicing(dataset, total_clients):
     """Slice a dataset randomly and equally for IID.
 
-    Args：
+    Args:
         dataset (torch.utils.data.Dataset): a dataset for slicing.
-        num_clients (int):  the number of client.
+        total_clients (int):  the number of client.
 
-    Returns：
+    Returns:
         dict: ``{ 0: indices of dataset, 1: indices of dataset, ..., k: indices of dataset }``
     """
-    num_items = int(len(dataset) / num_clients)
+    num_items = int(len(dataset) / total_clients)
     dict_users, all_idxs = {}, [i for i in range(len(dataset))]
-    for i in range(num_clients):
+    for i in range(total_clients):
         dict_users[i] = list(
             np.random.choice(all_idxs, num_items, replace=False))
         all_idxs = list(set(all_idxs) - set(dict_users[i]))
@@ -607,7 +607,7 @@ def partition_report(targets, data_indices, class_num=None, verbose=True, file=N
 def feddata_scatterplot(
     targets,
     client_dict,
-    num_clients,
+    total_clients,
     num_classes,
     figsize=(6, 4),
     max_size=200,
@@ -618,7 +618,7 @@ def feddata_scatterplot(
     Args:
         targets (_type_): List of labels, with each entry as integer number.
         client_dict (_type_): Dictionary contains sample index list for each client, ``{ client_id: indices}``
-        num_clients (_type_): Number of total clients
+        total_clients (_type_): Number of total clients
         num_classes (_type_): Number of total classes
         figsize (tuple, optional): Figure size for scatter plot. Defaults to (6, 4).
         max_size (int, optional): Max scatter marker size. Defaults to 200.
@@ -661,7 +661,7 @@ def feddata_scatterplot(
     sample_stats = report_df.values[:, 1 : 1 + num_classes]
     min_max_ratio = np.min(sample_stats) / np.max(sample_stats)
     data_tuples = []
-    for cid in range(num_clients):
+    for cid in range(total_clients):
         for k in range(num_classes):
             data_tuples.append((cid, k, sample_stats[cid, k] / np.max(sample_stats)))
 
@@ -679,7 +679,7 @@ def feddata_scatterplot(
     )
 
     # Customize the axes and layout
-    plt.xticks(range(num_clients), [f"Client {cid+1}" for cid in range(num_clients)])
+    plt.xticks(range(total_clients), [f"Client {cid+1}" for cid in range(total_clients)])
     plt.yticks(range(num_classes), [f"Class {k+1}" for k in range(num_classes)])
     plt.xlabel("Clients")
     plt.ylabel("Classes")

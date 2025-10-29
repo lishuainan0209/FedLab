@@ -39,7 +39,7 @@ class DittoSerialClientTrainer(SGDSerialClientTrainer):
     def setup_optim(self, epochs, batch_size, lr):
         return super().setup_optim(epochs, batch_size, lr)
 
-    def local_process(self, payload, id_list):
+    def train_process(self, payload, id_list):
         global_model = payload[0]
         for id in tqdm(id_list):
             # self._LOGGER.info("Local process is running. Training client {}".format(id))

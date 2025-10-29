@@ -29,10 +29,10 @@ class ClientTrainer(ModelMaintainer):
     """An abstract class representing a client trainer.
 
     In FedLab, we define the backend of client trainer show manage its local model.
-    It should have a function to update its model called :meth:`local_process`.
+    It should have a function to update its model called :meth:`train_process`.
 
     If you use our framework to define the activities of client, please make sure that your self-defined class
-    should subclass it. All subclasses should overwrite :meth:`local_process` and property ``uplink_package``.
+    should subclass it. All subclasses should overwrite :meth:`train_process` and property ``uplink_package``.
 
     Args:
         model (torch.nn.Module): PyTorch model.
@@ -69,7 +69,7 @@ class ClientTrainer(ModelMaintainer):
         raise NotImplementedError()
 
     @abstractclassmethod
-    def local_process(self, payload: List[torch.Tensor]):
+    def train_process(self, payload: List[torch.Tensor]):
         """Manager of the upper layer will call this function with accepted payload
         
             In synchronous mode, return True to end current FL round.
@@ -131,7 +131,7 @@ class SerialClientTrainer(SerialModelMaintainer):
         raise NotImplementedError()
 
     @abstractclassmethod
-    def local_process(self, id_list: list, payload: List[torch.Tensor]):
+    def train_process(self, id_list: list, payload: List[torch.Tensor]):
         """Define the local main process."""
         # Args:
         #     id_list (list): The list consists of client ids.

@@ -29,7 +29,7 @@ class RotatedMNIST(FedDataset):
         Args:
             root (str): Path to download raw dataset.
             path (str): Path to save partitioned subdataset.
-            num_clients (int): Number of clients.
+            total_clients (int): Number of clients.
         """
     def __init__(self, root, path, num) -> None:
         self.root = os.path.expanduser(root)
@@ -83,13 +83,13 @@ class RotatedMNIST(FedDataset):
             torch.save(dataset,
                        os.path.join(self.dir, "test", "data{}.pkl".format(i)))
 
-    def get_dataset(self, id, type="train"):
+    def _get_dataset(self, id, type="train"):
         dataset = torch.load(
             os.path.join(self.dir, type, "data{}.pkl".format(id)))
         return dataset
 
     def get_data_loader(self, id, batch_size=None, type="train"):
-        dataset = self.get_dataset(id, type)
+        dataset = self._get_dataset(id, type)
         batch_size = len(dataset) if batch_size is None else batch_size
         data_loader = DataLoader(dataset, batch_size=batch_size)
         return data_loader

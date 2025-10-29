@@ -17,17 +17,13 @@ from typing import List
 from copy import deepcopy
 import torch
 import torch.distributed as dist
-
-from . import HEADER_SENDER_RANK_IDX, HEADER_RECEIVER_RANK_IDX, HEADER_SLICE_SIZE_IDX, \
-    HEADER_MESSAGE_CODE_IDX, HEADER_DATA_TYPE_IDX
+from enum import Enum
+from . import HEADER_SENDER_RANK_IDX, HEADER_RECEIVER_RANK_IDX, HEADER_SLICE_SIZE_IDX, HEADER_MESSAGE_CODE_IDX, HEADER_DATA_TYPE_IDX
 from . import DEFAULT_SLICE_SIZE, DEFAULT_MESSAGE_CODE_VALUE
 from . import HEADER_SIZE
 from ...utils.message_code import MessageCode
 
-supported_torch_dtypes = [
-    torch.int8, torch.int16, torch.int32, torch.int64, torch.float16,
-    torch.float32, torch.float64
-]
+supported_torch_dtypes = [torch.int8, torch.int16, torch.int32, torch.int64, torch.float16, torch.float32, torch.float64]
 
 
 class Package(object):
@@ -47,22 +43,17 @@ class Package(object):
         content (torch.Tensor, optional): Tensors contained in this package.
     """
 
-    def __init__(self,
-                 message_code: MessageCode = None,
-                 content: List[torch.Tensor] = None):
+    def __init__(self, message_code: MessageCode = None, content: List[torch.Tensor] = None):
 
         if message_code is None:
             message_code = DEFAULT_MESSAGE_CODE_VALUE
         else:
-            if isinstance(message_code, MessageCode):
+            if isinstance(message_code, Enum):
                 message_code = message_code.value
-        assert isinstance(
-            message_code, int
-        ), "message_code can only be MessageCode or integer, not {}".format(
-            type(message_code))
+        assert isinstance(message_code, int), "message_code can only be MessageCode or integer, not {}".format(type(message_code))
 
         # initialize header. The dtype of header is set as torch.int32 as default.
-        self.header = torch.zeros(size=(HEADER_SIZE, ), dtype=torch.int32)
+        self.header = torch.zeros(size=(HEADER_SIZE,), dtype=torch.int32)
 
         if dist.is_initialized():
             self.header[HEADER_SENDER_RANK_IDX] = dist.get_rank()
@@ -74,7 +65,7 @@ class Package(object):
         self.header[HEADER_DATA_TYPE_IDX] = -1  # assigned by processor
 
         # initialize content and slices
-        self.slices = []
+        self._slices = []
         self.content = None
         self.dtype = None
 
@@ -90,9 +81,7 @@ class Package(object):
             tensor (torch.Tensor): Tensor to append in content.
         """
         if not isinstance(tensor, torch.Tensor):
-            raise ValueError(
-                "Invalid content type, expecting torch.Tensor but get {}".
-                format(type(tensor)))
+            raise ValueError("Invalid content type, expecting torch.Tensor but get {}".format(type(tensor)))
 
         shape = list(tensor.shape)
         slice = [tensor.numel(), len(shape)] + shape
@@ -104,13 +93,15 @@ class Package(object):
         else:
             if tensor.dtype is not self.dtype:
                 warnings.warn(
-                    "The dtype of current tensor is {}. But package dtype is {}. The current data type will be casted to {} and fedlab do not guarantee lossless conversion."
-                    .format(tensor.dtype, self.dtype, self.dtype))
+                    "The dtype of current tensor is {}. But package dtype is {}. The current data type will be casted to {} and fedlab do not guarantee lossless conversion.".format(
+                        tensor.dtype, self.dtype, self.dtype
+                    )
+                )
             tensor = tensor.to(self.dtype)
             self.content = torch.cat((self.content, tensor))
 
-        self.slices += slice
-        self.header[HEADER_SLICE_SIZE_IDX] = len(self.slices)
+        self._slices += slice
+        self.header[HEADER_SLICE_SIZE_IDX] = len(self._slices)
 
     def append_tensor_list(self, tensor_list: List[torch.Tensor]):
         """Append a list of tensors to :attr:`Package.content`.
@@ -144,16 +135,18 @@ class Package(object):
         index = 0  # parse variable for content
         iter = 0  # parse variable for slices
         parse_result = []
+        # slices中, 是 [张量数据量, 张量维度, 张量每个维度的大小...,张量数据量, 张量维度, 张量每个维度的大小...] 这样不断重复的
+        # iter代表的是每个张量的 张量数据量 的下标
         while iter < len(slices):
             offset = slices[iter]  # offset of content
             shape_len = slices[iter + 1]  # offset of shape tuple
-            shape = tuple(slices[iter + 2:iter + 2 +
-                                 shape_len])  # obtain shape tuple
+            shape = tuple(slices[iter + 2 : iter + 2 + shape_len])  # obtain shape tuple
 
-            seg_tensor = content[index:index + offset]
+            seg_tensor = content[index : index + offset]  # tensor具体内容
             reshape_tensor = seg_tensor.view(size=shape)  # reshape
 
             parse_result.append(reshape_tensor)
+            # 为下一个循环进行准备
             index += offset
             iter += shape_len + 2
 

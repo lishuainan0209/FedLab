@@ -31,7 +31,7 @@ class PartitionedCIFAR10(FedDataset):
         root (str): Path to download raw dataset.
         path (str): Path to save partitioned subdataset.
         dataname (str): "cifar10" or "cifar100"
-        num_clients (int): Number of clients.
+        total_clients (int): Number of clients.
         download (bool): Whether to download the raw dataset.
         preprocess (bool): Whether to preprocess the dataset.
         balance (bool, optional): Balanced partition over all clients or not. Default as ``True``.
@@ -48,7 +48,7 @@ class PartitionedCIFAR10(FedDataset):
                  root,
                  path,
                  dataname,
-                 num_clients,
+                 total_clients,
                  download=True,
                  preprocess=False,
                  balance=True,
@@ -63,7 +63,7 @@ class PartitionedCIFAR10(FedDataset):
         self.dataname = dataname
         self.root = os.path.expanduser(root)
         self.path = path
-        self.num_clients = num_clients
+        self.total_clients = total_clients
         self.transform = transform
         self.targt_transform = target_transform
 
@@ -103,7 +103,7 @@ class PartitionedCIFAR10(FedDataset):
                                                 transform=self.transform,
                                                 download=self.download)
         partitioner = CIFAR10Partitioner(trainset.targets,
-                                         self.num_clients,
+                                         self.total_clients,
                                          balance=balance,
                                          partition=partition,
                                          unbalance_sgm=unbalance_sgm,
@@ -129,7 +129,7 @@ class PartitionedCIFAR10(FedDataset):
                 dataset,
                 os.path.join(self.path, "train", "data{}.pkl".format(id)))
 
-    def get_dataset(self, cid, type="train"):
+    def _get_dataset(self, cid, type="train"):
         """Load subdataset for client with client ID ``cid`` from local file.
 
         Args:
@@ -151,7 +151,7 @@ class PartitionedCIFAR10(FedDataset):
             batch_size (int, optional): batch size in DataLoader.
             type (str, optional): Dataset type, can be ``"train"``, ``"val"`` or ``"test"``. Default as ``"train"``.
         """
-        dataset = self.get_dataset(cid, type)
+        dataset = self._get_dataset(cid, type)
         batch_size = len(dataset) if batch_size is None else batch_size
         data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
         return data_loader

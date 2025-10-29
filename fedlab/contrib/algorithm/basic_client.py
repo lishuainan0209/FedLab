@@ -18,6 +18,7 @@ from tqdm import tqdm
 from ...core.client.trainer import ClientTrainer, SerialClientTrainer
 from ...utils import Logger, SerializationTool
 
+
 class SGDClientTrainer(ClientTrainer):
     """Client backend handler, this class provides data process method to upper layer.
 
@@ -27,21 +28,19 @@ class SGDClientTrainer(ClientTrainer):
         device (str, optional): Assign model/data to the given GPUs. E.g., 'device:0' or 'device:0,1'. Defaults to None.
         logger (Logger, optional): :object of :class:`Logger`.
     """
-    def __init__(self,
-                 model:torch.nn.Module,
-                 cuda:bool=False,
-                 device:str=None,
-                 logger:Logger=None):
+
+    def __init__(self, model: torch.nn.Module, cuda: bool = False, device: str = None, logger: Logger = None):
         super(SGDClientTrainer, self).__init__(model, cuda, device)
 
         self._LOGGER = Logger() if logger is None else logger
 
     @property
+    # todo uplink_package 这个名字不好
     def uplink_package(self):
         """Return a tensor list for uploading to server.
 
-            This attribute will be called by client manager.
-            Customize it for new algorithms.
+        This attribute will be called by client manager.
+        Customize it for new algorithms.
         """
         return [self.model_parameters]
 
@@ -53,7 +52,7 @@ class SGDClientTrainer(ClientTrainer):
 
         Args:
             epochs (int): Local epochs.
-            batch_size (int): Local batch size. 
+            batch_size (int): Local batch size.
             lr (float): Learning rate.
         """
         self.epochs = epochs
@@ -61,7 +60,7 @@ class SGDClientTrainer(ClientTrainer):
         self.optimizer = torch.optim.SGD(self._model.parameters(), lr)
         self.criterion = torch.nn.CrossEntropyLoss()
 
-    def local_process(self, payload, id):
+    def train_process(self, payload, id):
         model_parameters = payload[0]
         train_loader = self.dataset.get_dataloader(id, self.batch_size)
         self.train(model_parameters, train_loader)
@@ -72,8 +71,7 @@ class SGDClientTrainer(ClientTrainer):
         Args:
             model_parameters (torch.Tensor): Serialized model parameters.
         """
-        SerializationTool.deserialize_model(
-            self._model, model_parameters)  # load parameters
+        SerializationTool.deserialize_model(self._model, model_parameters)  # load parameters
         self._LOGGER.info("Local train procedure is running")
         for ep in range(self.epochs):
             self._model.train()
@@ -104,6 +102,7 @@ class SGDSerialClientTrainer(SerialClientTrainer):
         logger (Logger, optional): Object of :class:`Logger`.
         personal (bool, optional): If Ture is passed, SerialModelMaintainer will generate the copy of local parameters list and maintain them respectively. These paremeters are indexed by [0, num-1]. Defaults to False.
     """
+
     def __init__(self, model, num_clients, cuda=False, device=None, logger=None, personal=False) -> None:
         super().__init__(model, num_clients, cuda, device, personal)
         self._LOGGER = Logger() if logger is None else logger
@@ -117,7 +116,7 @@ class SGDSerialClientTrainer(SerialClientTrainer):
 
         Args:
             epochs (int): Local epochs.
-            batch_size (int): Local batch size. 
+            batch_size (int): Local batch size.
             lr (float): Learning rate.
         """
         self.epochs = epochs
@@ -132,7 +131,7 @@ class SGDSerialClientTrainer(SerialClientTrainer):
         self.cache = []
         return package
 
-    def local_process(self, payload, id_list):
+    def train_process(self, payload, id_list):
         model_parameters = payload[0]
         for id in (progress_bar := tqdm(id_list)):
             progress_bar.set_description(f"Training on client {id}", refresh=True)
@@ -152,9 +151,16 @@ class SGDSerialClientTrainer(SerialClientTrainer):
         """
         self.set_model(model_parameters)
         self._model.train()
-
-        for _ in range(self.epochs):
-            for data, target in train_loader:
+        total_batches = len(train_loader)  # 获取总批次数
+        for epoch in range(self.epochs):
+            batch_pbar = tqdm(
+                train_loader,
+                desc=f"Epoch {epoch+1}/{self.epochs} (Batch)",  # 描述：当前轮次+批次
+                leave=False,  # 进度条完成后不保留（避免占用太多行）
+                position=1,  # 内层进度条位置（数值越大越靠下，避免与外层重叠）
+                dynamic_ncols=True,  # 自动适配终端宽度，避免换行
+            )
+            for data, target in batch_pbar:
                 if self.cuda:
                     data = data.cuda(self.device)
                     target = target.cuda(self.device)
@@ -165,5 +171,6 @@ class SGDSerialClientTrainer(SerialClientTrainer):
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
+                batch_pbar.set_postfix(loss=f"{loss.item():.4f}")  # 显示平均损失
 
         return [self.model_parameters]

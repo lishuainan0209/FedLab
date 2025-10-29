@@ -107,7 +107,15 @@ class PackageProcessor(object):
             return slices
 
         def recv_content(slices, data_type, src):
-            content_size = sum(slices)
+            #content_size = sum(slices)# # warn 原来fedlab源码中, 错误地将 slices 中的所有元素(包括形状、维度数等无关信息)求和,而没有区分 "元素数" 和 "辅助元信息"。
+            content_size = 0
+            i = 0
+            while i < len(slices):
+                numel = slices[i]  # 每个张量元信息的第一个元素是 numel
+                content_size += numel
+                # 跳过当前张量的其他元信息(len(shape) + 1 个元素:1个len(shape) + len(shape)个shape值)
+                len_shape = slices[i + 1]
+                i += 2 + len_shape  # 移动到下一个张量的元信息起始位置
             dtype = dtype_flab2torch(data_type)
             buffer = torch.zeros(size=(content_size, ), dtype=dtype)
 
